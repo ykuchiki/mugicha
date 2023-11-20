@@ -54,7 +54,7 @@ class AIDrive:
         # 環境の作成
         self.env = gym.make("decoponEnv")
 
-        self.env = SkipFrame(self.env, skip=4)
+        self.env = SkipFrame(self.env, skip=1)
         self.env = GrayScaleObservation(self.env)
         self.env = ResizeObservation(self.env, shape=84)
         self.env = FrameStack(self.env, num_stack=4)
@@ -91,6 +91,6 @@ class AIDrive:
 
 
 if __name__ == "__main__":
-    #game = Game()
-    game = AIDrive()
+    game = Game()
+    # game = AIDrive()
     game.run()

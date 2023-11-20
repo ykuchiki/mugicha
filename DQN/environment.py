@@ -50,8 +50,10 @@ class Environment(gym.Env):
         self.controller = controller
         self._setup_game()
 
+        self.episode_start_time = 0  # 残り時間
+
     def _setup_game(self):
-        # pygame.init()
+        pygame.init()
         pygame.display.set_caption("Decopon")
 
         self.window = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -177,6 +179,7 @@ class Environment(gym.Env):
     def reset(self):
         """エピソード開始時に状態をリセットする"""
         self._setup_game()
+        self.episode_start_time = pygame.time.get_ticks()  # エピソード開始時間を記録
         return self._get_observation(), {}
 
     def _get_observation(self):
@@ -187,7 +190,6 @@ class Environment(gym.Env):
 
         # PILライブラリを使用して画像を処理する
         image = Image.fromarray(screen_data, 'RGB')
-
 
         # NumPy配列に変換する
         observation = np.array(image)
@@ -257,7 +259,8 @@ class Environment(gym.Env):
         # スコアと残り時間を描画
         score_text = self.font.render(f"スコア: {self.score}", True, (255, 255, 255))
         self.window.blit(score_text, (10, 10))
-        time_text = self.font.render(f"残り時間: {TIMELIMIT - pygame.time.get_ticks() // 1000}", True, (255, 255, 255))
+        elapsed_time = (pygame.time.get_ticks() - self.episode_start_time) // 1000  # 経過時間を計算
+        time_text = self.font.render(f"残り時間: {TIMELIMIT - elapsed_time}", True, (255, 255, 255))
         self.window.blit(time_text, (10, 30))
 
         text = self.font.render("シンカ", True, (255, 255, 255))
@@ -284,7 +287,7 @@ class Environment(gym.Env):
             self.reward = score_change
         # 時間だけ経過してるなら負の報酬
         else:
-            self.reward = -0.0001
+            self.reward = -0.03
 
         self.previous_score = self.score
         return self.reward

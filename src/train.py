@@ -35,7 +35,7 @@ mugicha = Mugicha(state_dim=(4, 84, 84), action_dim=env.action_space.n, save_dir
 
 logger = MetricLogger(log_dir)
 
-episodes = 105
+episodes = 55
 
 for e in tqdm(range(episodes)):
 
