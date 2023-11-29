@@ -6,7 +6,7 @@ from DQN import environment # 消さないで
 
 register(
     id="decoponEnv",
-    entry_point="DQN.environment:Environment",
+    entry_point="DQN.environment:MugichaEnv",
     kwargs={"controller": AI()}
 )
 

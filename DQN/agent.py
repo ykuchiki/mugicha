@@ -11,10 +11,18 @@ BATCH_SIZE = 32
 GAMMA = 0.9
 SAVE_FREQUENCY = 5e5
 
+ERD = 0.9993  # イプシロンの減少率，経験的にこれが良さそう
+
+IMG_WEIGHT = 5.0
+POLY_WEIGHT = 1.0
+
+# MODE = "img_only"
+MODE = "yeah"
+
 
 class Mugicha:
-    def __init__(self, state_dim, action_dim, save_dir):
-        self.state_dim = state_dim
+    def __init__(self, img_dim, poly_feature_dim, action_dim, save_dir):
+        self.img_dim = img_dim
         self.action_dim = action_dim
         self.save_dir = save_dir
 
@@ -26,12 +34,12 @@ class Mugicha:
         self.gamma = GAMMA
 
         # モデルのインスタンス
-        self.net = MugichaNet(self.state_dim, self.action_dim).float()
-        if self.use_cuda:
-            self.net = self.net.to(device="cuda")
+        self.net = MugichaNet(self.img_dim, poly_feature_dim, self.action_dim, img_weight=IMG_WEIGHT, poly_weight=POLY_WEIGHT, mode=MODE).float()
+        #if self.use_cuda:
+        #    self.net = self.net.to(device='cuda')
 
         self.exploration_rate = 1
-        self.exploration_rate_decay = 0.99999975
+        self.exploration_rate_decay = ERD
         self.exploration_rate_min = 0.1
         self.curr_step = 0
 
@@ -59,13 +67,23 @@ class Mugicha:
 
         # 活用（EXPLOIT）
         else:
-            state = state.__array__()
+            # state = state.__array__()
+            image_data = state["image"].__array__()
+            poly_features = state["poly_features"].__array__()
+
             if self.use_cuda:
-                state = torch.tensor(state).cuda()
+                image_data = torch.tensor(image_data).cuda()
+                poly_features = torch.tensor(poly_features).cuda()
             else:
-                state = torch.tensor(state.copy())
-            state = state.unsqueeze(0)
-            action_values = self.net(state, model="online")
+                image_data = torch.tensor(image_data.copy())
+                poly_features = torch.tensor(poly_features.copy())
+
+            # state = state.unsqueeze(0)
+            # 画像データの形状を変更
+            image_data = image_data.unsqueeze(0)  # バッチ次元追加
+
+            # action_values = self.net(state, model="online")
+            action_values = self.net(image_data, poly_features, model="online")
             action_idx = torch.argmax(action_values, axis=1).item()
 
         # exploration_rateを減衰させます
@@ -87,41 +105,52 @@ class Mugicha:
             reward (float),
             done(bool))
         """
-        state = state.__array__()
-        next_state = next_state.__array__()
+        # state = state.__array__()
+        # next_state = next_state.__array__()
+        # 画像データとポリゴンの特性データに分離
+        image_data = state["image"].__array__()
+        poly_features = state["poly_features"].__array__()
+
+        next_image_data = next_state["image"].__array__()
+        next_poly_features = next_state["poly_features"].__array__()
 
         if self.use_cuda:
-            state = torch.tensor(state).cuda()
-            next_state = torch.tensor(next_state).cuda()
+            image_data = torch.tensor(image_data).cuda()
+            poly_features = torch.tensor(poly_features).cuda()
+            next_image_data = torch.tensor(next_image_data).cuda()
+            next_poly_features = torch.tensor(next_poly_features).cuda()
             action = torch.tensor([action]).cuda()
             reward = torch.tensor([reward]).cuda()
             done = torch.tensor([done]).cuda()
         else:
-            state = torch.tensor(state)
-            next_state = torch.tensor(next_state)
+            image_data = torch.tensor(image_data)
+            poly_features = torch.tensor(poly_features)
+            next_image_data = torch.tensor(next_image_data)
+            next_poly_features = torch.tensor(next_poly_features)
             action = torch.tensor([action])
             reward = torch.tensor([reward])
             done = torch.tensor([done])
 
-        self.memory.append((state, next_state, action, reward, done,))
+        self.memory.append((image_data, poly_features, next_image_data, next_poly_features, action, reward, done))
 
     def recall(self):
         """
         メモリから経験のバッチを取得
         """
         batch = random.sample(self.memory, self.batch_size)
-        state, next_state, action, reward, done = map(torch.stack, zip(*batch))
-        return state, next_state, action.squeeze(), reward.squeeze(), done.squeeze()
+        image_data, poly_features, next_image_data, next_poly_features, action, reward, done = map(torch.stack,
+                                                                                                   zip(*batch))
+        return image_data, poly_features, next_image_data, next_poly_features, action.squeeze(), reward.squeeze(), done.squeeze()
 
-    def td_estimate(self, state, action):
-        current_Q = self.net(state, model='online')[np.arange(0, self.batch_size), action] # Q_online(s,a)
+    def td_estimate(self, image_data, poly_features, action):
+        current_Q = self.net(image_data, poly_features, model='online')[np.arange(0, self.batch_size), action] # Q_online(s,a)
         return current_Q
 
     @torch.no_grad()
-    def td_target(self, reward, next_state, done):
-        next_state_Q = self.net(next_state, model="online")
+    def td_target(self, reward, next_image_data, next_poly_features, done):
+        next_state_Q = self.net(next_image_data, next_poly_features, model="online")
         best_action = torch.argmax(next_state_Q, axis=1)
-        next_Q = self.net(next_state, model="target")[
+        next_Q = self.net(next_image_data, next_poly_features, model="target")[
             np.arange(0, self.batch_size), best_action
         ]
         return (reward + (1 - done.float()) * self.gamma * next_Q).float()
@@ -160,14 +189,14 @@ class Mugicha:
         if self.curr_step % self.learn_every != 0:
             return None, None
 
-            # メモリからサンプリング
-        state, next_state, action, reward, done = self.recall()
+        # メモリからサンプリング
+        image_data, poly_features, next_image_data, next_poly_features, action, reward, done = self.recall()
 
         # TD Estimateの取得
-        td_est = self.td_estimate(state, action)
+        td_est = self.td_estimate(image_data, poly_features, action)
 
         # TD Targetの取得
-        td_tgt = self.td_target(reward, next_state, done)
+        td_tgt = self.td_target(reward, next_image_data, next_poly_features, done)
 
         # 損失をQ_onlineに逆伝播させる
         loss = self.update_Q_online(td_est, td_tgt)

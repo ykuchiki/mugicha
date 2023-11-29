@@ -16,6 +16,8 @@ HEIGHT, WIDTH = 640, 480
 TIMELIMIT = 1000
 LINE = 200
 
+POLY_FEAT_NUM = 8
+
 # オブジェクト(質量，半径，色，スコア，インデックス)
 Polygon = namedtuple("Polygon", ["mass", "radius", "color", "score", "index"])
 Polygons = [
@@ -35,11 +37,11 @@ Polygons = [
 
 
 
-class Environment(gym.Env):
+class MugichaEnv(gym.Env):
     def __init__(self, controller: Controller):
         pygame.init()  # pygameの全システムを初期化
         pygame.font.init()  # フォントシステムの初期化
-        super(Environment, self).__init__()
+        super(MugichaEnv, self).__init__()
 
         # アクション空間を定義
         self.action_space = spaces.Discrete(3)  # 左，右，落とす
@@ -95,11 +97,12 @@ class Environment(gym.Env):
         p0, p1 = polys.shapes
 
         if p0.index == 10 and p1.index == 10:
-            self.poly.remove(p0)
-            self.poly.remove(p1)
+            if p0 in self.poly:
+                self.poly.remove(p0)
+            if p1 in self.poly:
+                self.poly.remove(p1)
             space.remove(p0, p0.body, p1, p1.body)
-            # ここ何点？
-            self.score += 1000
+            self.score += 100
             return False
 
         if p0.index == p1.index:
@@ -107,8 +110,11 @@ class Environment(gym.Env):
             x = (p0.body.position.x + p1.body.position.x) / 2
             y = (p0.body.position.y + p1.body.position.y) / 2
             self.create_poly(x, y, p1.index + 1)
-            self.poly.remove(p0)
-            self.poly.remove(p1)
+            if p0 in self.poly:
+                self.poly.remove(p0)
+            if p1 in self.poly:
+                self.poly.remove(p1)
+
             space.remove(p0, p0.body, p1, p1.body)
 
         return True
@@ -192,11 +198,25 @@ class Environment(gym.Env):
         image = Image.fromarray(screen_data, 'RGB')
 
         # NumPy配列に変換する
-        observation = np.array(image)
+        image_feature = np.array(image)
 
         # 画像の向きを正しく
-        observation = np.rot90(observation, k=-1)
+        image_feature = np.rot90(image_feature, k=-1)
 
+        image_feature = self.process_image(image_feature)
+
+        # ポリゴンの特性の総和を計算
+        if self.poly:
+            poly_features = [self._get_poly_features(poly) for poly in self.poly]
+            poly_feature = np.sum(poly_features, axis=0, dtype=np.float32)
+        else:
+            # ポリゴンがない場合は、ゼロベクトルを使用
+            poly_feature = np.zeros(POLY_FEAT_NUM, dtype=np.float32)
+
+        observation = {
+            "image": image_feature,
+            "poly_features": poly_feature
+        }
         return observation
 
     def step(self, action):
@@ -224,7 +244,7 @@ class Environment(gym.Env):
             self.indicator.centerx = 65
 
         # ゲーム状態の更新
-        self.space.step(1 / 60)
+        # self.space.step(1 / 60)
 
         observation = self._get_observation()
         reward = self._get_reward()
@@ -268,10 +288,11 @@ class Environment(gym.Env):
         for i, poly in enumerate(self.progress):
             pygame.draw.rect(self.window, Polygons[i].color, poly)
 
-        # フレームレートの制限
-        self.fps(60)
+        self.space.step(1 / 60)
         # 画面を更新
         pygame.display.update()
+        # フレームレートの制限
+        self.fps(60)
 
     def close(self):
         """環境を閉じる際のクリーンアップ"""
@@ -281,16 +302,35 @@ class Environment(gym.Env):
         """現在のアクションに対する報酬を取得する"""
         # 現在のスコアと前のステップのスコアを比較
         score_change = self.score - self.previous_score
+        self.previous_score = self.score
 
         # スコアが増加した場合，正の報酬
         if score_change > 0:
-            self.reward = score_change
+            self.reward = 0.5 * score_change
         # 時間だけ経過してるなら負の報酬
         else:
-            self.reward = -0.03
+            self.reward -= 0.0003
 
-        self.previous_score = self.score
+        if self.check_threshold():
+            self.reward -= 0.04
+
         return self.reward
+
+    def _get_poly_features(self, poly):
+        """ポリゴンの特徴を取得する"""
+        # ポリゴンの位置、質量、半径を正規化
+        x_norm = (poly.body.position.x - WIDTH / 2) / (WIDTH / 2)
+        y_norm = (poly.body.position.y - HEIGHT / 2) / (HEIGHT / 2)
+        mass_norm = poly.mass / max(p.mass for p in Polygons)
+        radius_norm = poly.radius / max(p.radius for p in Polygons)
+
+        # 色の値を0-1の範囲に正規化
+        r_norm, g_norm, b_norm = [c / 255.0 for c in poly.color]
+
+
+        score_norm = Polygons[poly.index].score / max(p.score for p in Polygons)
+
+        return np.array([x_norm, y_norm, mass_norm, radius_norm, r_norm, g_norm, b_norm, score_norm], dtype=np.float32)
 
     def _is_done(self):
         """ゲームが終了したかどうかを判定"""
@@ -302,7 +342,7 @@ class Environment(gym.Env):
             return True
 
         # この値は調整の余地あり
-        if self.countOverflow > 100:
+        if self.countOverflow > 300:
             self.show_game_over()
             return True
         return False
@@ -320,3 +360,30 @@ class Environment(gym.Env):
 
         # 一定時間表示した後に画面を閉じる
         pygame.time.wait(300)  # 3000ミリ秒（3秒）待機
+
+    def check_threshold(self):
+        threshold = LINE * 1.1  # 閾値の110%
+        for poly in self.poly:
+            if poly.body.position.y + poly.radius > threshold:
+                return True
+        return False
+
+    def process_image(self, image, shape=84):
+        image = torch.tensor(image.copy(), dtype=torch.float).transpose(0, 2).transpose(1, 2)
+        # グレースケール化
+        transform = T.Grayscale()
+        image = transform(image)
+
+        # リサイズ
+        resize_shape = (shape, shape) if isinstance(shape, int) else tuple(shape)
+        transform_to_resize = T.Compose([
+            T.ToPILImage(),
+            T.Resize(resize_shape),
+            T.ToTensor()
+        ])
+        image = transform_to_resize(image)
+
+        image = image.squeeze(0)
+
+        return image
+

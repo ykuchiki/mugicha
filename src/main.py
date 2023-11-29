@@ -2,7 +2,7 @@ from src import environment as ev
 from decopon.controller import Human, AI
 from gym.wrappers import FrameStack
 from DQN.agent import Mugicha
-from DQN.utils import SkipFrame, ResizeObservation, GrayScaleObservation
+from DQN.utils import SkipFrame, ResizeObservation, GrayScaleObservation, CustomFrameStack
 
 import pygame
 from PIL import Image
@@ -12,7 +12,7 @@ import gym
 class Game:
     def __init__(self):
         # pygame.init()
-        self.env = ev.Environment(Human())
+        self.env = ev.MugichaEnv(Human())
         self.env.reset()
 
     def run(self):
@@ -55,21 +55,21 @@ class AIDrive:
         self.env = gym.make("decoponEnv")
 
         self.env = SkipFrame(self.env, skip=1)
-        self.env = GrayScaleObservation(self.env)
-        self.env = ResizeObservation(self.env, shape=84)
-        self.env = FrameStack(self.env, num_stack=4)
+        # self.env = GrayScaleObservation(self.env)
+        # self.env = ResizeObservation(self.env, shape=84)
+        # self.env = FrameStack(self.env, num_stack=4)
+        self.env = CustomFrameStack(self.env, num_stack=4)
         self.env.reset()
 
         self.state, _ = self.env.reset()
         save_dir = Path("trained_models")
-        self.mugicha = Mugicha(state_dim=(4, 84, 84), action_dim=self.env.action_space.n, save_dir=save_dir)
+        self.mugicha = Mugicha(img_dim=(4, 84, 84), poly_feature_dim=8, action_dim=self.env.action_space.n, save_dir=save_dir)
         load_path = Path("trained_models/mugicha_net_0.chkpt")
         self.mugicha.load(load_path)
 
 
     def run(self):
         while True:
-
             # 現在の状態に対するエージェントの行動を決める
             action = self.mugicha.act(self.state)
 
@@ -78,6 +78,8 @@ class AIDrive:
 
             # 環境の更新
             observation, reward, done, _, info = self.env.step(action)
+            with open("test.txt", "a") as file:
+                file.write(f"{reward} + \n")
 
             # ゲーム画面の描画
             self.env.render()
@@ -91,6 +93,6 @@ class AIDrive:
 
 
 if __name__ == "__main__":
-    game = Game()
-    # game = AIDrive()
+    # game = Game()
+    game = AIDrive()
     game.run()
