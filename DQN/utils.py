@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import gym
 from gym.spaces import Box
+from gym.wrappers import FrameStack
 import torch
 from torchvision import transforms as T
 
@@ -107,15 +108,15 @@ class MetricLogger:
         time_since_last_record = np.round(self.record_time - last_record_time, 3)
 
         print(
-            f"Episode {episode} - "
-            f"Step {step} - "
-            f"Epsilon {epsilon} - "
-            f"Mean Reward {mean_ep_reward} - "
-            f"Mean Length {mean_ep_length} - "
-            f"Mean Loss {mean_ep_loss} - "
-            f"Mean Q Value {mean_ep_q} - "
-            f"Time Delta {time_since_last_record} - "
-            f"Time {datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
+            f"Episode: {episode} \n"
+            f"Step: {step} \n"
+            f"Epsilon: {epsilon} \n"
+            f"Mean Reward: {mean_ep_reward} \n"
+            f"Mean Length: {mean_ep_length} \n"
+            f"Mean Loss: {mean_ep_loss} \n"
+            f"Mean Q Value: {mean_ep_q} \n"
+            f"Time Delta: {time_since_last_record} \n"
+            f"Time: {datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S')} \n"
         )
 
         with open(self.save_log, "a") as f:
@@ -168,3 +169,41 @@ class ResizeObservation(gym.ObservationWrapper):
         )
         observation = transforms(observation).squeeze(0)
         return observation
+
+
+#FrameStackを辞書型に対応するようにオーバーライド
+class CustomFrameStack(FrameStack):
+    def __init__(self, env, num_stack):
+        super().__init__(env, num_stack)
+        self.env = env
+        self.num_stack = num_stack
+        self.frames = {
+            'image': None,
+            'poly_features': None
+        }
+
+    def reset(self):
+        observation, _ = self.env.reset()
+        for key in self.frames.keys():
+            self.frames[key] = [observation[key]] * self.num_stack
+        return self._get_stacked_obs(), _
+
+    def step(self, action):
+        observation, reward, done, _, info = self.env.step(action)
+        for key in self.frames.keys():
+            self.frames[key].append(observation[key])
+            if len(self.frames[key]) > self.num_stack:
+                self.frames[key].pop(0)
+        return self._get_stacked_obs(), reward, done, _, info
+
+    def _get_stacked_obs(self):
+        stacked_obs = {}
+        for key, frame_list in self.frames.items():
+            # チャネル次元でスタックする
+            if key == 'image':
+                stacked_obs[key] = np.stack(frame_list, axis=0)
+            else:
+                # 他のデータはそのまま扱う
+                stacked_obs[key] = frame_list[-1]
+        return stacked_obs
+
