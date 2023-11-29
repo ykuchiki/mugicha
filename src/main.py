@@ -9,6 +9,8 @@ from PIL import Image
 from pathlib import Path
 import gym
 
+import src
+
 class Game:
     def __init__(self):
         # pygame.init()
@@ -52,7 +54,7 @@ class AIDrive:
     def __init__(self):
         # pygame.init()
         # 環境の作成
-        self.env = gym.make("decoponEnv")
+        self.env = gym.make("MugichaEnv")
 
         self.env = SkipFrame(self.env, skip=1)
         # self.env = GrayScaleObservation(self.env)
@@ -76,8 +78,6 @@ class AIDrive:
             # エージェントが行動を実行
             next_state, reward, done, _, info =self.env.step(action)
 
-            # 環境の更新
-            observation, reward, done, _, info = self.env.step(action)
             with open("test.txt", "a") as file:
                 file.write(f"{reward} + \n")
 
