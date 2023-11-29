@@ -11,7 +11,7 @@ BATCH_SIZE = 32
 GAMMA = 0.9
 SAVE_FREQUENCY = 5e5
 
-ERD = 0.9993  # イプシロンの減少率，経験的にこれが良さそう
+ERD = 0.9998  # イプシロンの減少率，経験的にこれが良さそう
 
 IMG_WEIGHT = 5.0
 POLY_WEIGHT = 1.0
@@ -35,10 +35,10 @@ class Mugicha:
 
         # モデルのインスタンス
         self.net = MugichaNet(self.img_dim, poly_feature_dim, self.action_dim, img_weight=IMG_WEIGHT, poly_weight=POLY_WEIGHT, mode=MODE).float()
-        #if self.use_cuda:
-        #    self.net = self.net.to(device='cuda')
+        if self.use_cuda:
+            self.net = self.net.to(device='cuda')
 
-        self.exploration_rate = 1
+        self.exploration_rate = 1.0
         self.exploration_rate_decay = ERD
         self.exploration_rate_min = 0.1
         self.curr_step = 0
@@ -61,6 +61,7 @@ class Mugicha:
         Outputs:
             action_idx (int): AIが取る行動を示す整数値
         """
+        # print(self.exploration_rate)
         # 探索（EXPLORE）
         if np.random.rand() < self.exploration_rate:
             action_idx = np.random.randint(self.action_dim)
@@ -86,13 +87,17 @@ class Mugicha:
             action_values = self.net(image_data, poly_features, model="online")
             action_idx = torch.argmax(action_values, axis=1).item()
 
-        # exploration_rateを減衰させます
-        self.exploration_rate *= self.exploration_rate_decay
-        self.exploration_rate = max(self.exploration_rate_min, self.exploration_rate)
+        # stepごとのイプシロンを減少させるときはこれ
+        # self.update_exploration_rate()
 
         # ステップを+1します
         self.curr_step += 1
         return action_idx
+    
+    def update_exploration_rate(self):
+        """イプシロンを減衰させる"""
+        self.exploration_rate *= self.exploration_rate_decay
+        self.exploration_rate = max(self.exploration_rate_min, self.exploration_rate)
 
     def cache(self, state, next_state, action, reward, done):
         """
@@ -208,9 +213,9 @@ class Mugicha:
             raise ValueError(f"{load_path} does not exist")
 
         ckp = torch.load(load_path, map_location=('cuda' if self.use_cuda else 'cpu'))
-        exploration_rate = ckp.get('exploration_rate')
+        # exploration_rate = ckp.get('exploration_rate')
         state_dict = ckp.get('model')
 
-        print(f"Loading model at {load_path} with exploration rate {exploration_rate}")
+        # print(f"Loading model at {load_path} with exploration rate {exploration_rate}")
         self.net.load_state_dict(state_dict)
-        self.exploration_rate = exploration_rate
+        # self.exploration_rate = exploration_rate

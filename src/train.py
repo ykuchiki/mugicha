@@ -5,8 +5,11 @@ import torch.cuda
 import gym
 # from gym.wrappers import FrameStack
 from tqdm import tqdm
+import sys
+sys.path.append('')
 
 import src  # 消さないで
+
 from DQN.agent import Mugicha
 from DQN.utils import SkipFrame, MetricLogger, ResizeObservation, GrayScaleObservation, CustomFrameStack
 
@@ -38,7 +41,8 @@ mugicha.load(load_path)
 
 logger = MetricLogger(log_dir)
 
-episodes = 305
+episodes = 10005
+
 
 for e in tqdm(range(episodes)):
 
@@ -66,13 +70,16 @@ for e in tqdm(range(episodes)):
         state = next_state
 
         # ゲーム画面の描画
-        env.render()
+        # env.render()
 
         # ゲームが終了したかどうかを確認
         # if done or info["flag_get"]:  # ゲームの終了条件によってはこれ
         if done:
             mugicha.save()
             break
+
+    # エピソードが終了したので、イプシロンを更新
+    mugicha.update_exploration_rate()
 
     logger.log_episode()
 
