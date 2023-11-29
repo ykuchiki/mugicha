@@ -1,4 +1,4 @@
-from src import environment as ev
+from DQN import environment as ev
 from decopon.controller import Human, AI
 from gym.wrappers import FrameStack
 from DQN.agent import Mugicha
