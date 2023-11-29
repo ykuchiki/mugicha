@@ -5,8 +5,6 @@ import torch.cuda
 import gym
 # from gym.wrappers import FrameStack
 from tqdm import tqdm
-import sys
-sys.path.append('')
 
 import src  # 消さないで
 

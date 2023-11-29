@@ -5,9 +5,9 @@ import gym
 from DQN import environment # 消さないで
 
 register(
-    id="decoponEnv",
+    id="MugichaEnv",
     entry_point="DQN.environment:MugichaEnv",
     kwargs={"controller": AI()}
 )
 
-env = gym.make("decoponEnv")
+env = gym.make("MugichaEnv")
