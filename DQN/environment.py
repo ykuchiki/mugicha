@@ -16,7 +16,7 @@ HEIGHT, WIDTH = 640, 480
 TIMELIMIT = 1000
 LINE = 200
 
-POLY_FEAT_NUM = 8
+OVER_FLOW_NUM = 200
 
 # オブジェクト(質量，半径，色，スコア，インデックス)
 Polygon = namedtuple("Polygon", ["mass", "radius", "color", "score", "index"])
@@ -44,9 +44,10 @@ class MugichaEnv(gym.Env):
         super(MugichaEnv, self).__init__()
 
         # アクション空間を定義
-        self.action_space = spaces.Discrete(3)  # 左，右，落とす
+        # self.action_space = spaces.Discrete(3)  # 左，右，落とす
+        self.action_space = spaces.Box(low=np.array([66]), high=np.array([WIDTH-66]), dtype=np.int8)  # アクションをインジケータの座標で指定
         # 観測空間を定義 84×84のグレースケール(128×128もしくはRGB画像にするか悩み)
-        self.observation_space = spaces.Box(low=0, high=255, shape=(84, 84, 1), dtype=np.uint8)
+        self.observation_space = spaces.Box(low=0, high=255, shape=(1, 84, 84), dtype=np.uint8)
 
         # ゲーム設定の初期化
         self.controller = controller
@@ -102,6 +103,7 @@ class MugichaEnv(gym.Env):
             if p1 in self.poly:
                 self.poly.remove(p1)
             space.remove(p0, p0.body, p1, p1.body)
+            # ここ何点？
             self.score += 100
             return False
 
@@ -114,8 +116,8 @@ class MugichaEnv(gym.Env):
                 self.poly.remove(p0)
             if p1 in self.poly:
                 self.poly.remove(p1)
-
             space.remove(p0, p0.body, p1, p1.body)
+            return False
 
         return True
 
@@ -194,39 +196,20 @@ class MugichaEnv(gym.Env):
         screen_surface = pygame.display.get_surface()
         screen_data = pygame.surfarray.array3d(screen_surface)
 
-        # PILライブラリを使用して画像を処理する
-        image = Image.fromarray(screen_data, 'RGB')
-
-        # NumPy配列に変換する
-        image_feature = np.array(image)
+        observation = self._process_frame(screen_data)
 
         # 画像の向きを正しく
-        image_feature = np.rot90(image_feature, k=-1)
+        observation = np.rot90(observation, k=-1)
 
-        image_feature = self.process_image(image_feature)
-
-        # ポリゴンの特性の総和を計算
-        if self.poly:
-            poly_features = [self._get_poly_features(poly) for poly in self.poly]
-            poly_feature = np.sum(poly_features, axis=0, dtype=np.float32)
-        else:
-            # ポリゴンがない場合は、ゼロベクトルを使用
-            poly_feature = np.zeros(POLY_FEAT_NUM, dtype=np.float32)
-
-        observation = {
-            "image": image_feature,
-            "poly_features": poly_feature
-        }
         return observation
 
-    def step(self, action):
+    def step_(self, action):
         """与えられたアクションに基づいて環境を更新し，新しい状態と報酬を返す"""
         # アクションに応じてゲームの状態を更新
         #if self.check_event(pygame.QUIT):
         #   break
         if self.check_overflow():
             self.countOverflow += 1
-
         if action == 0:
             self.indicator.centerx -= 3
         elif action == 1:
@@ -244,7 +227,7 @@ class MugichaEnv(gym.Env):
             self.indicator.centerx = 65
 
         # ゲーム状態の更新
-        # self.space.step(1 / 60)
+        self.space.step(1 / 60)
 
         observation = self._get_observation()
         reward = self._get_reward()
@@ -253,7 +236,58 @@ class MugichaEnv(gym.Env):
         truncated = {}
         info = {}  # 必要な追加情報があればここ実装
 
-        return observation, reward, done, {}, info
+        return observation, reward, done, truncated, info
+
+    def step(self, action):
+        """アクションをインジケータの座標で指定する"""
+
+        action = np.clip(action, 66, WIDTH - 66)
+
+        flag = False
+        while not flag:
+            if self.check_overflow():
+                self.countOverflow += 1
+            if self.countOverflow > OVER_FLOW_NUM:
+                break
+            difference = abs(self.indicator.centerx - action)
+            if difference > 3:
+                to_move = True
+            else:
+                to_move = False
+
+            if to_move:
+                # アクション（インジケーターの新しいX座標）を適用
+                if self.indicator.centerx < action:
+                    self.indicator.centerx += 3
+                elif self.indicator.centerx > action:
+                    self.indicator.centerx -= 3
+            elif pygame.time.get_ticks() - self.drop_ticks > 500 and not self.check_overflow():
+                self.create_poly(self.indicator.centerx, self.indicator.topleft[1], self.current)
+                self.drop_ticks = pygame.time.get_ticks()
+                self.current = self.next
+                self.next = random.randint(0, 4)
+                self.countOverflow = 0
+                flag = True
+
+            if self.indicator.centerx < 65:
+                self.indicator.centerx = WIDTH - 65
+            if self.indicator.centerx > WIDTH - 65:
+                self.indicator.centerx = 65
+
+            # ゲーム状態の更新
+            self.space.step(1 / 60.0)
+
+            self.render()
+
+        # 新しい観測を取得
+        observation = self._get_observation()
+        reward = self._get_reward()
+        done = self._is_done()
+        truncated = {}
+        info = {}  # 必要な追加情報があればここ実装
+        self.space.step(1 / 60.0)
+
+        return observation, reward, done, truncated, info
 
     def render(self, mode='human'):
         """環境の状態を描画"""
@@ -288,11 +322,10 @@ class MugichaEnv(gym.Env):
         for i, poly in enumerate(self.progress):
             pygame.draw.rect(self.window, Polygons[i].color, poly)
 
-        self.space.step(1 / 60)
-        # 画面を更新
-        pygame.display.update()
         # フレームレートの制限
         self.fps(60)
+        # 画面を更新
+        pygame.display.update()
 
     def close(self):
         """環境を閉じる際のクリーンアップ"""
@@ -300,49 +333,34 @@ class MugichaEnv(gym.Env):
 
     def _get_reward(self):
         """現在のアクションに対する報酬を取得する"""
+        reward = 0
         # 現在のスコアと前のステップのスコアを比較
-        score_change = self.score - self.previous_score
-        self.previous_score = self.score
-
-        # スコアが増加した場合，正の報酬
-        if score_change > 0:
-            self.reward = 0.5 * score_change
-        # 時間だけ経過してるなら負の報酬
+        if self.isGameOver or self.countOverflow > OVER_FLOW_NUM:
+            reward = -100
         else:
-            self.reward -= 0.0003
+            # 現在のスコアと前のステップのスコアを比較
+            score_change = self.score - self.previous_score
 
-        if self.check_threshold():
-            self.reward -= 0.04
+            # スコアが増加した場合，正の報酬
+            if score_change > 0:
+                reward = 0.0001 * score_change ** 2
 
-        return self.reward
-
-    def _get_poly_features(self, poly):
-        """ポリゴンの特徴を取得する"""
-        # ポリゴンの位置、質量、半径を正規化
-        x_norm = (poly.body.position.x - WIDTH / 2) / (WIDTH / 2)
-        y_norm = (poly.body.position.y - HEIGHT / 2) / (HEIGHT / 2)
-        mass_norm = poly.mass / max(p.mass for p in Polygons)
-        radius_norm = poly.radius / max(p.radius for p in Polygons)
-
-        # 色の値を0-1の範囲に正規化
-        r_norm, g_norm, b_norm = [c / 255.0 for c in poly.color]
-
-
-        score_norm = Polygons[poly.index].score / max(p.score for p in Polygons)
-
-        return np.array([x_norm, y_norm, mass_norm, radius_norm, r_norm, g_norm, b_norm, score_norm], dtype=np.float32)
+        self.previous_score = self.score
+        return reward
 
     def _is_done(self):
         """ゲームが終了したかどうかを判定"""
         # タイムリミット
         if (pygame.time.get_ticks() - self.start_time) // 1000 > TIMELIMIT:
+            self.show_game_over()
             return True
 
         if self.isGameOver:
+            self.show_game_over()
             return True
 
         # この値は調整の余地あり
-        if self.countOverflow > 300:
+        if self.countOverflow > OVER_FLOW_NUM:
             self.show_game_over()
             return True
         return False
@@ -361,29 +379,8 @@ class MugichaEnv(gym.Env):
         # 一定時間表示した後に画面を閉じる
         pygame.time.wait(300)  # 3000ミリ秒（3秒）待機
 
-    def check_threshold(self):
-        threshold = LINE * 1.1  # 閾値の110%
-        for poly in self.poly:
-            if poly.body.position.y + poly.radius > threshold:
-                return True
-        return False
-
-    def process_image(self, image, shape=84):
-        image = torch.tensor(image.copy(), dtype=torch.float).transpose(0, 2).transpose(1, 2)
-        # グレースケール化
-        transform = T.Grayscale()
-        image = transform(image)
-
-        # リサイズ
-        resize_shape = (shape, shape) if isinstance(shape, int) else tuple(shape)
-        transform_to_resize = T.Compose([
-            T.ToPILImage(),
-            T.Resize(resize_shape),
-            T.ToTensor()
-        ])
-        image = transform_to_resize(image)
-
-        image = image.squeeze(0)
-
-        return image
-
+    def _process_frame(self, frame):
+        """画像をグレースケールに変換し、リサイズする"""
+        image = Image.fromarray(frame, 'RGB').convert('L')  # グレースケール変換
+        image = image.resize((84, 84), Image.LANCZOS)  # リサイズ
+        return np.array(image)
