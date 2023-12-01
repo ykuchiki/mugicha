@@ -120,6 +120,8 @@ class Mugicha:
         """
         batch = random.sample(self.memory, self.batch_size)
         state, next_state, action, reward, done = map(torch.stack, zip(*batch))
+        state = state.float() / 255
+        next_state = next_state.float() / 255
         return state, next_state, action.squeeze(), reward.squeeze(), done.squeeze()
 
     def td_estimate(self, state, action):
