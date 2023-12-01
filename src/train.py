@@ -3,21 +3,19 @@ from pathlib import Path
 
 import torch.cuda
 import gym
-# from gym.wrappers import FrameStack
+from gym.wrappers import FrameStack
 from tqdm import tqdm
 
 import src  # 消さないで
 
 from DQN.agent import Mugicha
-from DQN.utils import SkipFrame, MetricLogger, ResizeObservation, GrayScaleObservation, CustomFrameStack
+from DQN.utils import SkipFrame, MetricLogger, ResizeObservation, GrayScaleObservation
 
 # 環境の作成
-env = gym.make("decoponEnv")
+env = gym.make("MugichaEnv")
 
-env = SkipFrame(env, skip=4)
-# env = GrayScaleObservation(env)
-# env = ResizeObservation(env, shape=84)
-env = CustomFrameStack(env, num_stack=4)
+# env = SkipFrame(env, skip=4)
+env = FrameStack(env, num_stack=1)
 
 #環境の初期化
 env.reset()
@@ -33,14 +31,15 @@ log_dir = Path("log")
 
 # save_dir.mkdir(parents=True)
 
-mugicha = Mugicha(img_dim=(4, 84, 84), poly_feature_dim=8, action_dim=env.action_space.n, save_dir=save_dir)
-load_path = Path("trained_models/mugicha_net_0.chkpt")
-mugicha.load(load_path)
+
+mugicha = Mugicha(state_dim=(1, 84, 84), action_dim=350, save_dir=save_dir)
+# load_path = Path("trained_models/mugicha_net_0.chkpt")
+# mugicha.load(load_path)
 
 logger = MetricLogger(log_dir)
 
-episodes = 10005
 
+episodes = 3
 
 for e in tqdm(range(episodes)):
 
@@ -54,6 +53,8 @@ for e in tqdm(range(episodes)):
 
         # エージェントが行動を実行
         next_state, reward, done, _, info = env.step(action)
+        print(reward)
+        # print(next_state.shape)
 
         # 記憶
         mugicha.cache(state, next_state, action, reward, done)

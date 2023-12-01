@@ -2,7 +2,7 @@ from DQN import environment as ev
 from decopon.controller import Human, AI
 from gym.wrappers import FrameStack
 from DQN.agent import Mugicha
-from DQN.utils import SkipFrame, ResizeObservation, GrayScaleObservation, CustomFrameStack
+from DQN.utils import SkipFrame, ResizeObservation, GrayScaleObservation
 
 import pygame
 from PIL import Image
@@ -57,18 +57,13 @@ class AIDrive:
         self.env = gym.make("MugichaEnv")
 
         self.env = SkipFrame(self.env, skip=1)
-        # self.env = GrayScaleObservation(self.env)
-        # self.env = ResizeObservation(self.env, shape=84)
-        # self.env = FrameStack(self.env, num_stack=4)
-        self.env = CustomFrameStack(self.env, num_stack=4)
         self.env.reset()
 
         self.state, _ = self.env.reset()
         save_dir = Path("trained_models")
-        self.mugicha = Mugicha(img_dim=(4, 84, 84), poly_feature_dim=8, action_dim=self.env.action_space.n, save_dir=save_dir)
+        self.mugicha = Mugicha(state_dim=(1, 84, 84), action_dim=350, save_dir=save_dir)
         load_path = Path("trained_models/mugicha_net_0.chkpt")
         self.mugicha.load(load_path)
-
 
     def run(self):
         while True:
@@ -77,9 +72,9 @@ class AIDrive:
 
             # エージェントが行動を実行
             next_state, reward, done, _, info =self.env.step(action)
-
-            with open("test.txt", "a") as file:
-                file.write(f"{reward} + \n")
+            #print(reward)
+            # with open("test.txt", "a") as file:
+            #     file.write(f"{reward} + \n")
 
             # ゲーム画面の描画
             self.env.render()
