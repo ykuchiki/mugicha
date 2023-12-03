@@ -1,4 +1,6 @@
-from DQN import environment as ev
+import sys
+sys.path.append("")
+from DQN import MugichaEnv as ev
 from decopon.controller import Human, AI
 from gym.wrappers import FrameStack
 from DQN.agent import Mugicha
@@ -61,9 +63,9 @@ class AIDrive:
 
         self.state, _ = self.env.reset()
         save_dir = Path("trained_models")
-        self.mugicha = Mugicha(state_dim=(1, 84, 84), action_dim=350, save_dir=save_dir)
-        load_path = Path("trained_models/mugicha_net_0.chkpt")
-        self.mugicha.load(load_path)
+        self.mugicha = Mugicha(state_dim=(1, 84, 84), action_dim=348, save_dir=save_dir)
+        #load_path = Path("trained_models/mugicha_net_0.chkpt")
+        #self.mugicha.load(load_path)
 
     def run(self):
         while True:
@@ -77,7 +79,7 @@ class AIDrive:
             #     file.write(f"{reward} + \n")
 
             # ゲーム画面の描画
-            self.env.render()
+            #self.env.render()
 
             self.state = next_state
 
