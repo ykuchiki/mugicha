@@ -6,17 +6,10 @@ import gym
 from gym.wrappers import FrameStack
 from tqdm import tqdm
 
-import sys
-sys.path.append("")
-
 import src  # 消さないで
 
 from DQN.agent import Mugicha
 from DQN.utils import SkipFrame, MetricLogger, ResizeObservation, GrayScaleObservation
-
-# CUDAのデバッグを有効化
-import os
-os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
 # 環境の作成
 env = gym.make("MugichaEnv")
@@ -40,13 +33,13 @@ log_dir = Path("log")
 
 
 mugicha = Mugicha(state_dim=(1, 84, 84), action_dim=348, save_dir=save_dir)
-#load_path = Path("trained_models/mugicha_net_0.chkpt")
-#mugicha.load(load_path)
+# load_path = Path("trained_models/mugicha_net_0.chkpt")
+# mugicha.load(load_path)
 
 logger = MetricLogger(log_dir)
 
 
-episodes = 500
+episodes = 50
 
 for e in tqdm(range(episodes)):
 
@@ -60,7 +53,7 @@ for e in tqdm(range(episodes)):
 
         # エージェントが行動を実行
         next_state, reward, done, _, info = env.step(action)
-        # print(reward)
+        print(reward)
         # print(next_state.shape)
 
         # 記憶

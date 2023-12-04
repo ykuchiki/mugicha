@@ -1,6 +1,4 @@
-import sys
-sys.path.append("")
-from DQN import MugichaEnv as ev
+from DQN import environment as ev
 from decopon.controller import Human, AI
 from gym.wrappers import FrameStack
 from DQN.agent import Mugicha
@@ -57,8 +55,8 @@ class AIDrive:
         # pygame.init()
         # 環境の作成
         self.env = gym.make("MugichaEnv")
-
-        self.env = SkipFrame(self.env, skip=1)
+        self.env = FrameStack(self.env, num_stack=1)
+        # self.env = SkipFrame(self.env, skip=1)
         self.env.reset()
 
         self.state, _ = self.env.reset()
@@ -79,7 +77,7 @@ class AIDrive:
             #     file.write(f"{reward} + \n")
 
             # ゲーム画面の描画
-            #self.env.render()
+            self.env.render()
 
             self.state = next_state
 

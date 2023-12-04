@@ -12,8 +12,8 @@ GAMMA = 0.9
 SAVE_FREQUENCY = 5e5
 SAVE_NUM = 0
 
-ERD = 0.99996
-# ERD = 0.2
+#ERD = 0.9998
+ERD=0
 lr = 0.001
 
 class Mugicha:
@@ -59,15 +59,19 @@ class Mugicha:
         """
         # 探索（EXPLORE）
         if np.random.rand() < self.exploration_rate:
-            action_idx = np.random.randint(self.action_dim)
+            action_idx = np.random.randint(self.action_dim) + 66
+
         # 活用（EXPLOIT）
         else:
             state = state.__array__().astype(np.float32) / 255
-            state = torch.from_numpy(state).unsqueeze(0)  # NumPy 配列から直接テンソルを作成
             if self.use_cuda:
-                state = state.to(device="cuda")
+                state = torch.tensor(state).cuda()
+            else:
+                state = torch.tensor(state.copy())
+            state = state.unsqueeze(0)
+            # print(state.shape)
             action_values = self.net(state, model="online")
-            action_idx = torch.argmax(action_values, axis=1).item()
+            action_idx = torch.argmax(action_values, axis=1).item() + 66
 
         self.update_exploration_rate()
 
@@ -123,9 +127,8 @@ class Mugicha:
         return state, next_state, action.squeeze(), reward.squeeze(), done.squeeze()
 
     def td_estimate(self, state, action):
-        print(action.shape)
-        print(state.shape)
-        current_Q = self.net(state, model='online')[np.arange(0, self.batch_size), action] # Q_online(s,a)
+        state = state.float()  #
+        current_Q = self.net(state, model='online')[np.arange(0, self.batch_size), action]  # Q_online(s,a)
         return current_Q
 
     @torch.no_grad()
@@ -190,9 +193,9 @@ class Mugicha:
             raise ValueError(f"{load_path} does not exist")
 
         ckp = torch.load(load_path, map_location=('cuda' if self.use_cuda else 'cpu'))
-        #exploration_rate = ckp.get('exploration_rate')
+        exploration_rate = ckp.get('exploration_rate')
         state_dict = ckp.get('model')
 
-        #print(f"Loading model at {load_path} with exploration rate {exploration_rate}")
+        print(f"Loading model at {load_path} with exploration rate {exploration_rate}")
         self.net.load_state_dict(state_dict)
-        #self.exploration_rate = exploration_rate
+        self.exploration_rate = exploration_rate
