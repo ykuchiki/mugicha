@@ -12,7 +12,8 @@ GAMMA = 0.9
 SAVE_FREQUENCY = 5e5
 SAVE_NUM = 0
 
-ERD = 0.9998
+#ERD = 0.9998
+ERD=0
 lr = 0.001
 
 class Mugicha:
@@ -68,10 +69,11 @@ class Mugicha:
             else:
                 state = torch.tensor(state.copy())
             state = state.unsqueeze(0)
+            # print(state.shape)
             action_values = self.net(state, model="online")
             action_idx = torch.argmax(action_values, axis=1).item() + 66
 
-        # self.update_exploration_rate()
+        self.update_exploration_rate()
 
         # ステップを+1します
         self.curr_step += 1
@@ -125,7 +127,8 @@ class Mugicha:
         return state, next_state, action.squeeze(), reward.squeeze(), done.squeeze()
 
     def td_estimate(self, state, action):
-        current_Q = self.net(state, model='online')[np.arange(0, self.batch_size), action] # Q_online(s,a)
+        state = state.float()  #
+        current_Q = self.net(state, model='online')[np.arange(0, self.batch_size), action]  # Q_online(s,a)
         return current_Q
 
     @torch.no_grad()

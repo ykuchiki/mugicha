@@ -32,14 +32,14 @@ log_dir = Path("log")
 # save_dir.mkdir(parents=True)
 
 
-mugicha = Mugicha(state_dim=(1, 84, 84), action_dim=350, save_dir=save_dir)
+mugicha = Mugicha(state_dim=(1, 84, 84), action_dim=348, save_dir=save_dir)
 # load_path = Path("trained_models/mugicha_net_0.chkpt")
 # mugicha.load(load_path)
 
 logger = MetricLogger(log_dir)
 
 
-episodes = 3
+episodes = 50
 
 for e in tqdm(range(episodes)):
 
@@ -78,7 +78,7 @@ for e in tqdm(range(episodes)):
             break
 
     # エピソードが終了したので、イプシロンを更新
-    mugicha.update_exploration_rate()
+    # mugicha.update_exploration_rate()
 
     logger.log_episode()
 

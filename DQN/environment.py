@@ -336,7 +336,7 @@ class MugichaEnv(gym.Env):
         reward = 0
         # 現在のスコアと前のステップのスコアを比較
         if self.isGameOver or self.countOverflow > OVER_FLOW_NUM:
-            reward = -100
+            reward = -10
         else:
             # 現在のスコアと前のステップのスコアを比較
             score_change = self.score - self.previous_score

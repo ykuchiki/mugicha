@@ -55,15 +55,15 @@ class AIDrive:
         # pygame.init()
         # 環境の作成
         self.env = gym.make("MugichaEnv")
-
-        self.env = SkipFrame(self.env, skip=1)
+        self.env = FrameStack(self.env, num_stack=1)
+        # self.env = SkipFrame(self.env, skip=1)
         self.env.reset()
 
         self.state, _ = self.env.reset()
         save_dir = Path("trained_models")
-        self.mugicha = Mugicha(state_dim=(1, 84, 84), action_dim=350, save_dir=save_dir)
-        load_path = Path("trained_models/mugicha_net_0.chkpt")
-        self.mugicha.load(load_path)
+        self.mugicha = Mugicha(state_dim=(1, 84, 84), action_dim=348, save_dir=save_dir)
+        #load_path = Path("trained_models/mugicha_net_0.chkpt")
+        #self.mugicha.load(load_path)
 
     def run(self):
         while True:
