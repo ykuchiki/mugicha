@@ -12,8 +12,8 @@ GAMMA = 0.9
 SAVE_FREQUENCY = 5e5
 SAVE_NUM = 0
 
-#ERD = 0.9998
-ERD=0
+ERD = 0.9998
+#ERD=0
 lr = 0.001
 
 class Mugicha:
