@@ -16,7 +16,9 @@ HEIGHT, WIDTH = 640, 480
 TIMELIMIT = 1000
 LINE = 200
 
-OVER_FLOW_NUM = 200
+FPS = 60 * 1
+
+OVER_FLOW_NUM = 200 * 1
 
 # オブジェクト(質量，半径，色，スコア，インデックス)
 Polygon = namedtuple("Polygon", ["mass", "radius", "color", "score", "index"])
@@ -90,6 +92,7 @@ class MugichaEnv(gym.Env):
 
         self.isGameOver = False
         self.countOverflow = 0
+        self.isMerged = False
 
         self.progress = [pygame.Rect(10 + i * 20, 70, 20, 20) for i in range(11)]
 
@@ -97,26 +100,30 @@ class MugichaEnv(gym.Env):
     def merge(self, polys, space, _):
         p0, p1 = polys.shapes
 
+        if self.isMerged:
+            return True
+
+
         if p0.index == 10 and p1.index == 10:
             if p0 in self.poly:
                 self.poly.remove(p0)
             if p1 in self.poly:
                 self.poly.remove(p1)
             space.remove(p0, p0.body, p1, p1.body)
-            # ここ何点？
             self.score += 100
+            self.isMerged = True
             return False
 
         if p0.index == p1.index:
             self.score += Polygons[p0.index].score
             x = (p0.body.position.x + p1.body.position.x) / 2
             y = (p0.body.position.y + p1.body.position.y) / 2
-            self.create_poly(x, y, p1.index + 1)
-            if p0 in self.poly:
-                self.poly.remove(p0)
-            if p1 in self.poly:
-                self.poly.remove(p1)
+            index = p1.index + 1
+            self.poly.remove(p0)
+            self.poly.remove(p1)
             space.remove(p0, p0.body, p1, p1.body)
+            self.create_poly(x, y, index)
+            self.isMerged = True
             return False
 
         return True
@@ -242,9 +249,10 @@ class MugichaEnv(gym.Env):
         """アクションをインジケータの座標で指定する"""
 
         action = np.clip(action, 66, WIDTH - 66)
-
+        self.isMerged = False
         flag = False
         while not flag:
+            self.isMerged = False
             if self.check_overflow():
                 self.countOverflow += 1
             if self.countOverflow > OVER_FLOW_NUM:
@@ -275,7 +283,7 @@ class MugichaEnv(gym.Env):
                 self.indicator.centerx = 65
 
             # ゲーム状態の更新
-            self.space.step(1 / 60.0)
+            self.space.step(1 / FPS)
 
             self.render()
 
@@ -285,7 +293,7 @@ class MugichaEnv(gym.Env):
         done = self._is_done()
         truncated = {}
         info = {}  # 必要な追加情報があればここ実装
-        self.space.step(1 / 60.0)
+        self.space.step(1 / FPS)
 
         return observation, reward, done, truncated, info
 
@@ -323,7 +331,7 @@ class MugichaEnv(gym.Env):
             pygame.draw.rect(self.window, Polygons[i].color, poly)
 
         # フレームレートの制限
-        self.fps(60)
+        self.fps(FPS)
         # 画面を更新
         pygame.display.update()
 
