@@ -5,6 +5,11 @@ import torch.cuda
 import gym
 from gym.wrappers import FrameStack
 from tqdm import tqdm
+from PIL import Image
+import numpy as np
+
+import sys
+sys.path.append("")
 
 import src  # 消さないで
 
@@ -39,7 +44,7 @@ mugicha = Mugicha(state_dim=(1, 84, 84), action_dim=348, save_dir=save_dir)
 logger = MetricLogger(log_dir)
 
 
-episodes = 500
+episodes = 10000
 
 for e in tqdm(range(episodes)):
 
@@ -54,6 +59,7 @@ for e in tqdm(range(episodes)):
         # エージェントが行動を実行
         next_state, reward, done, _, info = env.step(action)
         print(reward)
+        print("state", next_state.shape)
         # print(next_state.shape)
 
         # 記憶
@@ -61,6 +67,7 @@ for e in tqdm(range(episodes)):
 
         # 訓練
         q, loss = mugicha.learn()
+        print(q)
 
         # ログ保存
         logger.log_step(reward, loss, q)
@@ -78,7 +85,7 @@ for e in tqdm(range(episodes)):
             break
 
     # エピソードが終了したので、イプシロンを更新
-    # mugicha.update_exploration_rate()
+    mugicha.update_exploration_rate()
 
     logger.log_episode()
 
