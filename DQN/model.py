@@ -28,10 +28,10 @@ class MugichaNet(nn.Module):
             nn.ReLU(),
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1),
             nn.ReLU(),
-            #nn.Flatten(1, -1),
-            #nn.Linear(3136, 512),
-            #nn.ReLU(),
-            #nn.Linear(512, output_dim),
+            nn.Flatten(1, -1),
+            nn.Linear(3136, 512),
+            nn.ReLU(),
+            nn.Linear(512, output_dim),
         )
 
         self.target = copy.deepcopy(self.online)
