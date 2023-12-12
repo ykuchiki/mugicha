@@ -47,7 +47,7 @@ class MugichaEnv(gym.Env):
 
         # アクション空間を定義
         # self.action_space = spaces.Discrete(3)  # 左，右，落とす
-        self.action_space = spaces.Box(low=np.array([66]), high=np.array([WIDTH-66]), dtype=np.int8)  # アクションをインジケータの座標で指定
+        self.action_space = spaces.Box(low=np.array([66]), high=np.array([WIDTH-66]), dtype=np.int16)  # アクションをインジケータの座標で指定
         # 観測空間を定義 84×84のグレースケール(128×128もしくはRGB画像にするか悩み)
         self.observation_space = spaces.Box(low=0, high=255, shape=(1, 84, 84), dtype=np.uint8)
 
@@ -206,7 +206,10 @@ class MugichaEnv(gym.Env):
         observation = self._process_frame(screen_data)
 
         # 画像の向きを正しく
-        observation = np.rot90(observation, k=-1)
+        # observation = np.rot90(observation, k=-1)
+
+        print("shape", np.array(observation).shape)
+        print("dtype", np.array(observation).dtype)
 
         return observation
 
@@ -283,7 +286,7 @@ class MugichaEnv(gym.Env):
                 self.indicator.centerx = 65
 
             # ゲーム状態の更新
-            self.space.step(1 / FPS)
+            self.space.step(1 / 30)
 
             self.render()
 
@@ -293,7 +296,7 @@ class MugichaEnv(gym.Env):
         done = self._is_done()
         truncated = {}
         info = {}  # 必要な追加情報があればここ実装
-        self.space.step(1 / FPS)
+        self.space.step(1 / 30)
 
         return observation, reward, done, truncated, info
 
@@ -331,7 +334,7 @@ class MugichaEnv(gym.Env):
             pygame.draw.rect(self.window, Polygons[i].color, poly)
 
         # フレームレートの制限
-        self.fps(FPS)
+        self.fps(6000)
         # 画面を更新
         pygame.display.update()
 
@@ -391,4 +394,9 @@ class MugichaEnv(gym.Env):
         """画像をグレースケールに変換し、リサイズする"""
         image = Image.fromarray(frame, 'RGB').convert('L')  # グレースケール変換
         image = image.resize((84, 84), Image.LANCZOS)  # リサイズ
+        image = np.array(image)
+        # uint8 から float32 に変換し、0から1の範囲に正規化
+        image = image.astype(np.float32) / 255.0
+
+        #image = np.expand_dims(image, axis=0)
         return np.array(image)

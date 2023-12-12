@@ -12,9 +12,9 @@ GAMMA = 0.9
 SAVE_FREQUENCY = 5e5
 SAVE_NUM = 0
 
-ERD = 0.9998
-#ERD=0
-lr = 0.001
+#ERD = 0.9998
+ERD=0
+lr = 0.00025
 
 class Mugicha:
     def __init__(self, state_dim, action_dim, save_dir):
@@ -34,7 +34,7 @@ class Mugicha:
         if self.use_cuda:
             self.net = self.net.to(device="cuda")
 
-        self.exploration_rate = 1
+        self.exploration_rate = 0
         self.exploration_rate_decay = ERD
         self.exploration_rate_min = 0.1
         self.curr_step = 0
@@ -44,7 +44,8 @@ class Mugicha:
 
         self.save_every = SAVE_FREQUENCY  # モデルを保存するまでの実験ステップの数
 
-        self.burnin = 1e4  # 経験を訓練させるために最低限必要なステップ数
+        #self.burnin = 1e4  # 経験を訓練させるために最低限必要なステップ数
+        self.burnin = 100
         self.learn_every = 3  # Q_onlineを更新するタイミングを示すステップ数
         self.sync_every = 1e4  # Q_target & Q_onlineを同期させるタイミングを示すステップ数
 
@@ -68,12 +69,12 @@ class Mugicha:
                 state = torch.tensor(state).cuda()
             else:
                 state = torch.tensor(state.copy())
-            state = state.unsqueeze(0)
+            # state = state.unsqueeze(0)
             # print(state.shape)
             action_values = self.net(state, model="online")
             action_idx = torch.argmax(action_values, axis=1).item() + 66
 
-        self.update_exploration_rate()
+        #self.update_exploration_rate()
 
         # ステップを+1します
         self.curr_step += 1
@@ -85,6 +86,7 @@ class Mugicha:
         # exploration_rateを減衰させます
         self.exploration_rate *= self.exploration_rate_decay
         self.exploration_rate = max(self.exploration_rate_min, self.exploration_rate)
+        print("ERD", self.exploration_rate)
 
 
     def cache(self, state, next_state, action, reward, done):
@@ -133,6 +135,7 @@ class Mugicha:
 
     @torch.no_grad()
     def td_target(self, reward, next_state, done):
+        print(next_state.shape, next_state.type)
         next_state_Q = self.net(next_state, model="online")
         best_action = torch.argmax(next_state_Q, axis=1)
         next_Q = self.net(next_state, model="target")[
