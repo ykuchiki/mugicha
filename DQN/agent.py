@@ -12,8 +12,8 @@ GAMMA = 0.9
 SAVE_FREQUENCY = 5e5
 SAVE_NUM = 0
 
-#ERD = 0.9998
-ERD=0
+ERD = 0.9998
+# ERD = 0
 lr = 0.00025
 
 class Mugicha:
@@ -44,8 +44,8 @@ class Mugicha:
 
         self.save_every = SAVE_FREQUENCY  # モデルを保存するまでの実験ステップの数
 
-        #self.burnin = 1e4  # 経験を訓練させるために最低限必要なステップ数
-        self.burnin = 100
+        self.burnin = 1e4  # 経験を訓練させるために最低限必要なステップ数
+        # self.burnin = 33
         self.learn_every = 3  # Q_onlineを更新するタイミングを示すステップ数
         self.sync_every = 1e4  # Q_target & Q_onlineを同期させるタイミングを示すステップ数
 
@@ -64,13 +64,14 @@ class Mugicha:
 
         # 活用（EXPLOIT）
         else:
+            print("AI ACTION")
             state = state.__array__().astype(np.float32) / 255
             if self.use_cuda:
                 state = torch.tensor(state).cuda()
             else:
                 state = torch.tensor(state.copy())
-            # state = state.unsqueeze(0)
-            # print(state.shape)
+            state = state.unsqueeze(0)
+            state = state.unsqueeze(0)
             action_values = self.net(state, model="online")
             action_idx = torch.argmax(action_values, axis=1).item() + 66
 
@@ -86,7 +87,7 @@ class Mugicha:
         # exploration_rateを減衰させます
         self.exploration_rate *= self.exploration_rate_decay
         self.exploration_rate = max(self.exploration_rate_min, self.exploration_rate)
-        print("ERD", self.exploration_rate)
+        print("ERD is ", self.exploration_rate)
 
 
     def cache(self, state, next_state, action, reward, done):
@@ -102,6 +103,9 @@ class Mugicha:
         """
         state = state.__array__()
         next_state = next_state.__array__()
+        # チャネル次元を追加 (2D -> 3D)
+        state = np.expand_dims(state, axis=0)
+        next_state = np.expand_dims(next_state, axis=0)
 
         if self.use_cuda:
             state = torch.tensor(state).cuda()
@@ -129,8 +133,8 @@ class Mugicha:
         return state, next_state, action.squeeze(), reward.squeeze(), done.squeeze()
 
     def td_estimate(self, state, action):
-        state = state.float()  #
-        current_Q = self.net(state, model='online')[np.arange(0, self.batch_size), action]  # Q_online(s,a)
+        state = state.float()
+        current_Q = self.net(state, model='online')[np.arange(0, self.batch_size), action-66]  # Q_online(s,a)
         return current_Q
 
     @torch.no_grad()

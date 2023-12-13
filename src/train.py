@@ -1,4 +1,3 @@
-import datetime
 from pathlib import Path
 
 import torch.cuda
@@ -20,9 +19,9 @@ from DQN.utils import SkipFrame, MetricLogger, ResizeObservation, GrayScaleObser
 env = gym.make("MugichaEnv")
 
 # env = SkipFrame(env, skip=4)
-env = FrameStack(env, num_stack=1)
+# env = FrameStack(env, num_stack=1)
 
-#環境の初期化
+# 環境の初期化
 env.reset()
 
 next_state, reward, done, _, info = env.step(action=0)
@@ -58,16 +57,17 @@ for e in tqdm(range(episodes)):
 
         # エージェントが行動を実行
         next_state, reward, done, _, info = env.step(action)
-        print(reward)
-        print("state", next_state.shape)
-        # print(next_state.shape)
+        print("reward is ", reward)
+
+        # float32 -> 画像として保存
+        image_data = Image.fromarray(np.int8(state*255), "L")
+        image_data.save("game_state.png")
 
         # 記憶
         mugicha.cache(state, next_state, action, reward, done)
 
         # 訓練
         q, loss = mugicha.learn()
-        print(q)
 
         # ログ保存
         logger.log_step(reward, loss, q)
