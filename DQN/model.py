@@ -20,7 +20,6 @@ class MugichaNet(nn.Module):
         if w != 84:
             raise ValueError(f"Expecting input width: 84, got: {w}")
 
-        print("intput_dim",input_dim)
         self.online = nn.Sequential(
             nn.Conv2d(in_channels=c, out_channels=32, kernel_size=8, stride=4),
             nn.ReLU(),
@@ -43,7 +42,6 @@ class MugichaNet(nn.Module):
     def forward(self, input, model):
         if model == "online":
             s = self.online(input)
-            print("S", s.shape)
             return s
         elif model == "target":
             return self.target(input)

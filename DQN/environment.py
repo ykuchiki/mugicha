@@ -7,8 +7,6 @@ from gym import spaces
 import numpy as np
 import pygame
 import pymunk
-import torch
-import torchvision.transforms as T
 
 from decopon.controller import Controller, Human
 
@@ -207,9 +205,6 @@ class MugichaEnv(gym.Env):
 
         # 画像の向きを正しく
         # observation = np.rot90(observation, k=-1)
-
-        print("shape", np.array(observation).shape)
-        print("dtype", np.array(observation).dtype)
 
         return observation
 
