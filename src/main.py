@@ -1,3 +1,6 @@
+import sys
+sys.path.append("")
+
 from DQN import environment as ev
 from decopon.controller import Human, AI
 from gym.wrappers import FrameStack
@@ -61,8 +64,8 @@ class AIDrive:
         self.state, _ = self.env.reset()
         save_dir = Path("trained_models")
         self.mugicha = Mugicha(state_dim=(1, 84, 84), action_dim=348, save_dir=save_dir)
-        #load_path = Path("trained_models/mugicha_net_0.chkpt")
-        #self.mugicha.load(load_path)
+        load_path = Path("trained_models/mugicha_net_0.chkpt")
+        self.mugicha.load(load_path)
 
     def run(self):
         while True:

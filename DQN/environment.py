@@ -44,10 +44,10 @@ class MugichaEnv(gym.Env):
         super(MugichaEnv, self).__init__()
 
         # アクション空間を定義
-        # self.action_space = spaces.Discrete(3)  # 左，右，落とす
-        self.action_space = spaces.Box(low=np.array([66]), high=np.array([WIDTH-66]), dtype=np.int16)  # アクションをインジケータの座標で指定
-        # 観測空間を定義 84×84のグレースケール(128×128もしくはRGB画像にするか悩み)
-        self.observation_space = spaces.Box(low=0, high=255, shape=(1, 84, 84), dtype=np.uint8)
+        self.action_space = spaces.Discrete(12)
+        # self.action_space = spaces.Box(low=np.array([66]), high=np.array([WIDTH-66]), dtype=np.int16)  # アクションをインジケータの座標で指定
+        # 観測空間を定義 84×84のグレースケール
+        self.observation_space = spaces.Box(low=0, high=255, shape=(84, 84), dtype=np.float32)
 
         # ゲーム設定の初期化
         self.controller = controller
@@ -93,6 +93,9 @@ class MugichaEnv(gym.Env):
         self.isMerged = False
 
         self.progress = [pygame.Rect(10 + i * 20, 70, 20, 20) for i in range(11)]
+
+        self.last_action = None
+        self.same_action_count = 0
 
     # ポリゴンが衝突した時の処理
     def merge(self, polys, space, _):
@@ -247,6 +250,14 @@ class MugichaEnv(gym.Env):
         """アクションをインジケータの座標で指定する"""
 
         action = np.clip(action, 66, WIDTH - 66)
+
+        # 前回と同じアクションが選択された場合、カウントをインクリメント
+        if action == self.last_action:
+            self.same_action_count += 1
+        else:
+            self.same_action_count = 1  # 新しいアクションなのでカウントをリセット
+        self.last_action = action
+
         self.isMerged = False
         flag = False
         while not flag:
@@ -281,7 +292,7 @@ class MugichaEnv(gym.Env):
                 self.indicator.centerx = 65
 
             # ゲーム状態の更新
-            self.space.step(1 / 30)
+            self.space.step(1 / 60)
 
             self.render()
 
@@ -342,7 +353,7 @@ class MugichaEnv(gym.Env):
         reward = 0
         # 現在のスコアと前のステップのスコアを比較
         if self.isGameOver or self.countOverflow > OVER_FLOW_NUM:
-            reward = -10
+            reward = -1
         else:
             # 現在のスコアと前のステップのスコアを比較
             score_change = self.score - self.previous_score
@@ -350,6 +361,10 @@ class MugichaEnv(gym.Env):
             # スコアが増加した場合，正の報酬
             if score_change > 0:
                 reward = 0.0001 * score_change ** 2
+
+        # 同じアクションが4回以上選択された場合の減点を考慮
+        if self.same_action_count >= 4:
+            reward -= 0.5  # 減点量
 
         self.previous_score = self.score
         return reward

@@ -10,7 +10,7 @@ CAPACITY = 100000
 BATCH_SIZE = 32
 GAMMA = 0.9
 SAVE_FREQUENCY = 5e5
-SAVE_NUM = 0
+SAVE_NUM = 1
 
 ERD = 0.9998
 # ERD = 0
@@ -34,7 +34,7 @@ class Mugicha:
         if self.use_cuda:
             self.net = self.net.to(device="cuda")
 
-        self.exploration_rate = 0
+        self.exploration_rate = 1
         self.exploration_rate_decay = ERD
         self.exploration_rate_min = 0.1
         self.curr_step = 0
@@ -60,7 +60,7 @@ class Mugicha:
         """
         # 探索（EXPLORE）
         if np.random.rand() < self.exploration_rate:
-            action_idx = np.random.randint(self.action_dim) + 66
+            action_idx = np.random.randint(self.action_dim) 
 
         # 活用（EXPLOIT）
         else:
@@ -73,15 +73,15 @@ class Mugicha:
             state = state.unsqueeze(0)
             state = state.unsqueeze(0)
             action_values = self.net(state, model="online")
-            action_idx = torch.argmax(action_values, axis=1).item() + 66
+            action_idx = torch.argmax(action_values, axis=1).item() 
 
         #self.update_exploration_rate()
 
         # ステップを+1します
         self.curr_step += 1
-        if action_idx is None:
-            action_idx = 240
-        return action_idx
+        # アクションインデックスを実際のx座標に変換
+        actual_action = action_idx * 29 + 66 
+        return actual_action
 
     def update_exploration_rate(self):
         # exploration_rateを減衰させます
@@ -133,17 +133,17 @@ class Mugicha:
         return state, next_state, action.squeeze(), reward.squeeze(), done.squeeze()
 
     def td_estimate(self, state, action):
+        action = (action - 66) // 29
         state = state.float()
-        current_Q = self.net(state, model='online')[np.arange(0, self.batch_size), action-66]  # Q_online(s,a)
+        current_Q = self.net(state, model='online')[np.arange(0, self.batch_size), action]  # Q_online(s,a)
         return current_Q
 
     @torch.no_grad()
     def td_target(self, reward, next_state, done):
-        print(next_state.shape, next_state.type)
         next_state_Q = self.net(next_state, model="online")
-        best_action = torch.argmax(next_state_Q, axis=1)
+        best_action = torch.argmax(next_state_Q, axis=1) 
         next_Q = self.net(next_state, model="target")[
-            np.arange(0, self.batch_size), best_action
+            np.arange(0, self.batch_size), best_action 
         ]
         return (reward + (1 - done.float()) * self.gamma * next_Q).float()
 
