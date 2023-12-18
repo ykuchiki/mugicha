@@ -36,7 +36,7 @@ log_dir = Path("log")
 # save_dir.mkdir(parents=True)
 
 
-mugicha = Mugicha(state_dim=(1, 84, 84), action_dim=348, save_dir=save_dir)
+mugicha = Mugicha(state_dim=(1, 84, 84), action_dim=12, save_dir=save_dir)
 # load_path = Path("trained_models/mugicha_net_0.chkpt")
 # mugicha.load(load_path)
 
@@ -54,14 +54,13 @@ for e in tqdm(range(episodes)):
 
         # 現在の状態に対するエージェントの行動を決める
         action = mugicha.act(state)
-
         # エージェントが行動を実行
         next_state, reward, done, _, info = env.step(action)
         print("reward is ", reward)
 
         # float32 -> 画像として保存
-        image_data = Image.fromarray(np.int8(state*255), "L")
-        image_data.save("game_state.png")
+        # image_data = Image.fromarray(np.int8(state*255), "L")
+        # image_data.save("game_state.png")
 
         # 記憶
         mugicha.cache(state, next_state, action, reward, done)
