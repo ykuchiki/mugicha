@@ -10,16 +10,18 @@ CAPACITY = 100000
 BATCH_SIZE = 32
 GAMMA = 0.9
 SAVE_FREQUENCY = 5e5
-SAVE_NUM = 1
+SAVE_NUM = 0
 
 ERD = 0.9998
 # ERD = 0
 lr = 0.00025
 
 class Mugicha:
-    def __init__(self, state_dim, action_dim, save_dir):
+    def __init__(self, state_dim, action_dim, drop_poly_dim, poly_dim, save_dir):
         self.state_dim = state_dim
         self.action_dim = action_dim
+        self.drop_poly_dim = drop_poly_dim
+        self.poly_dim = poly_dim
         self.save_dir = save_dir
 
         self.use_cuda = torch.cuda.is_available()
@@ -30,7 +32,7 @@ class Mugicha:
         self.gamma = GAMMA
 
         # モデルのインスタンス
-        self.net = MugichaNet(self.state_dim, self.action_dim).float()
+        self.net = MugichaNet(self.state_dim, self.action_dim, self.drop_poly_dim, self.poly_dim).float()
         if self.use_cuda:
             self.net = self.net.to(device="cuda")
 
@@ -65,14 +67,22 @@ class Mugicha:
         # 活用（EXPLOIT）
         else:
             print("AI ACTION")
-            state = state.__array__().astype(np.float32) / 255
+            # image_data = state["image"].__array__().astype(np.float32) / 255
+            image_data = state["image"]
+            drop_poly_info = torch.tensor(state["drop_poly"], dtype=torch.float32).unsqueeze(0)
+            poly_info = torch.tensor(state["poly"], dtype=torch.float32).unsqueeze(0)
+            
             if self.use_cuda:
-                state = torch.tensor(state).cuda()
+                # image_data = torch.tensor(state).cuda()
+                image_data = torch.tensor(image_data).cuda()
+                drop_poly_info = drop_poly_info.cuda()
+                poly_info = poly_info.cuda()
             else:
-                state = torch.tensor(state.copy())
-            state = state.unsqueeze(0)
-            state = state.unsqueeze(0)
-            action_values = self.net(state, model="online")
+                image_data = torch.tensor(image_data.copy())
+
+            image_data = image_data.unsqueeze(0)
+            image_data = image_data.unsqueeze(0)
+            action_values = self.net(image_data, drop_poly_info, poly_info, model="online")
             action_idx = torch.argmax(action_values, axis=1).item() 
 
         #self.update_exploration_rate()
@@ -91,58 +101,51 @@ class Mugicha:
 
 
     def cache(self, state, next_state, action, reward, done):
-        """
-        経験をself.memory (replay buffer)に保存
+        state_image = torch.tensor(state['image'].__array__(), dtype=torch.float32)
+        state_drop_poly = torch.tensor(state['drop_poly'], dtype=torch.float32)
+        state_poly = torch.tensor(state['poly'], dtype=torch.float32)
 
-        Inputs:
-            state (LazyFrame),
-            next_state (LazyFrame),
-            action (int),
-            reward (float),
-            done(bool))
-        """
-        state = state.__array__()
-        next_state = next_state.__array__()
-        # チャネル次元を追加 (2D -> 3D)
-        state = np.expand_dims(state, axis=0)
-        next_state = np.expand_dims(next_state, axis=0)
+        next_state_image = torch.tensor(next_state['image'].__array__(), dtype=torch.float32)
+        next_state_drop_poly = torch.tensor(next_state['drop_poly'], dtype=torch.float32)
+        next_state_poly = torch.tensor(next_state['poly'], dtype=torch.float32)
+
+        action = torch.tensor([action], dtype=torch.int64)
+        reward = torch.tensor([reward], dtype=torch.float32)
+        done = torch.tensor([done], dtype=torch.bool)
 
         if self.use_cuda:
-            state = torch.tensor(state).cuda()
-            next_state = torch.tensor(next_state).cuda()
-            action = torch.tensor([action]).cuda()
-            reward = torch.tensor([reward]).cuda()
-            done = torch.tensor([done]).cuda()
-        else:
-            state = torch.tensor(state)
-            next_state = torch.tensor(next_state)
-            action = torch.tensor([action])
-            reward = torch.tensor([reward])
-            done = torch.tensor([done])
+            state_image = state_image.cuda()
+            state_drop_poly = state_drop_poly.cuda()
+            state_poly = state_poly.cuda()
+            next_state_image = next_state_image.cuda()
+            next_state_drop_poly = next_state_drop_poly.cuda()
+            next_state_poly = next_state_poly.cuda()
+            action = action.cuda()
+            reward = reward.cuda()
+            done = done.cuda()
 
-        self.memory.append((state, next_state, action, reward, done,))
+        self.memory.append((state_image, state_drop_poly, state_poly, next_state_image, next_state_drop_poly, next_state_poly, action, reward, done))
 
     def recall(self):
-        """
-        メモリから経験のバッチを取得
-        """
         batch = random.sample(self.memory, self.batch_size)
-        state, next_state, action, reward, done = map(torch.stack, zip(*batch))
-        state = state.float() / 255
-        next_state = next_state.float() / 255
-        return state, next_state, action.squeeze(), reward.squeeze(), done.squeeze()
+        state_image, state_drop_poly, state_poly, next_state_image, next_state_drop_poly, next_state_poly, action, reward, done = map(torch.stack, zip(*batch))
 
-    def td_estimate(self, state, action):
+        state_image = state_image.unsqueeze(1)
+        next_state_image = next_state_image.unsqueeze(1)
+
+        return state_image, state_drop_poly, state_poly, next_state_image, next_state_drop_poly, next_state_poly, action.squeeze(), reward.squeeze(), done.squeeze()
+
+    def td_estimate(self, state_image, state_drop_poly, state_poly, action):
         action = (action - 66) // 29
-        state = state.float()
-        current_Q = self.net(state, model='online')[np.arange(0, self.batch_size), action]  # Q_online(s,a)
+        state_image = state_image.float()
+        current_Q = self.net(state_image, state_drop_poly, state_poly, model='online')[np.arange(0, self.batch_size), action]  # Q_online(s,a)
         return current_Q
 
     @torch.no_grad()
-    def td_target(self, reward, next_state, done):
-        next_state_Q = self.net(next_state, model="online")
+    def td_target(self, reward, next_state_image, next_state_drop_poly, next_state_poly, done):
+        next_state_Q = self.net(next_state_image, next_state_drop_poly, next_state_poly, model="online")
         best_action = torch.argmax(next_state_Q, axis=1) 
-        next_Q = self.net(next_state, model="target")[
+        next_Q = self.net(next_state_image, next_state_drop_poly, next_state_poly, model="target")[
             np.arange(0, self.batch_size), best_action 
         ]
         return (reward + (1 - done.float()) * self.gamma * next_Q).float()
@@ -182,13 +185,13 @@ class Mugicha:
             return None, None
 
             # メモリからサンプリング
-        state, next_state, action, reward, done = self.recall()
+        state_image, state_drop_poly, state_poly, next_state_image, next_state_drop_poly, next_state_poly, action, reward, done = self.recall()
 
         # TD Estimateの取得
-        td_est = self.td_estimate(state, action)
+        td_est = self.td_estimate(state_image, state_drop_poly, state_poly, action)
 
         # TD Targetの取得
-        td_tgt = self.td_target(reward, next_state, done)
+        td_tgt = self.td_target(reward, next_state_image, next_state_drop_poly, next_state_poly, done)
 
         # 損失をQ_onlineに逆伝播させる
         loss = self.update_Q_online(td_est, td_tgt)
