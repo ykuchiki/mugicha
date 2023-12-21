@@ -36,7 +36,7 @@ log_dir = Path("log")
 # save_dir.mkdir(parents=True)
 
 
-mugicha = Mugicha(state_dim=(1, 84, 84), action_dim=12, save_dir=save_dir)
+mugicha = Mugicha(state_dim=(1, 84, 84), action_dim=12, drop_poly_dim=3, poly_dim=60, save_dir=save_dir)
 # load_path = Path("trained_models/mugicha_net_0.chkpt")
 # mugicha.load(load_path)
 

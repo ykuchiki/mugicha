@@ -47,7 +47,7 @@ class MugichaEnv(gym.Env):
         self.action_space = spaces.Discrete(12)
         # self.action_space = spaces.Box(low=np.array([66]), high=np.array([WIDTH-66]), dtype=np.int16)  # アクションをインジケータの座標で指定
         # 観測空間を定義 84×84のグレースケール
-        self.observation_space = spaces.Box(low=0, high=255, shape=(84, 84), dtype=np.float32)
+        self.observation_space = spaces.Box(low=0, high=255, shape=(1, 84, 84), dtype=np.float32)
 
         # ゲーム設定の初期化
         self.controller = controller
@@ -204,12 +204,51 @@ class MugichaEnv(gym.Env):
         screen_surface = pygame.display.get_surface()
         screen_data = pygame.surfarray.array3d(screen_surface)
 
-        observation = self._process_frame(screen_data)
+        image_feat = self._process_frame(screen_data)
+        drop_poly_info, poly_info = self.get_poly_info()
 
-        # 画像の向きを正しく
-        # observation = np.rot90(observation, k=-1)
+        observation ={
+            "image": image_feat,
+            "drop_poly": drop_poly_info,
+            "poly": poly_info
+        }
 
         return observation
+    
+    def get_poly_info(self):
+        """落とすポリゴンとインジケータの座標, および上20個のポリゴン情報を取得"""
+        drop_poly_info = []  # [現在のポリゴン，次のポリゴン，インジケータのx座標]
+        poly = Polygons[self.current]
+        drop_poly_info.append(poly.index)
+        poly = Polygons[self.next]
+        drop_poly_info.append(poly.index)
+        drop_poly_info.append(self.indicator.x)
+
+        all_poly_data = []
+        poly_info = []  # (60)[インデックス，x座標，y座標] 
+        for poly in self.poly:
+            tmp = [int(poly.index), int(poly.body.position.x), int(poly.body.position.y)]
+            all_poly_data.append(tmp)
+
+        all_poly_data_sorted = sorted(all_poly_data, reverse=False, key=lambda x: x[2])
+        counter = 0
+        for s_poly in all_poly_data_sorted:
+            poly_info.append(s_poly[0])
+            poly_info.append(s_poly[1])
+            poly_info.append(s_poly[2])
+            counter += 1
+            if counter == 20:
+                break
+        if counter < 20:
+            for _ in range(20 - counter):
+                poly_info.append(int(-1))
+                poly_info.append(int(-1))
+                poly_info.append(int(-1))
+
+        drop_poly_info = np.array(drop_poly_info, dtype=np.float32)
+        poly_info = np.array(poly_info, dtype=np.float32)
+
+        return drop_poly_info, poly_info
 
     def step_(self, action):
         """与えられたアクションに基づいて環境を更新し，新しい状態と報酬を返す"""
@@ -364,7 +403,7 @@ class MugichaEnv(gym.Env):
 
         # 同じアクションが4回以上選択された場合の減点を考慮
         if self.same_action_count >= 4:
-            reward -= 0.5  # 減点量
+            reward -= 0.03 * self.same_action_count  # 減点量
 
         self.previous_score = self.score
         return reward
