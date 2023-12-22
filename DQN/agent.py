@@ -1,8 +1,9 @@
 import random
 from collections import deque
-
+import pickle
 import torch
 import numpy as np
+import os
 
 from DQN.model import MugichaNet
 
@@ -38,7 +39,7 @@ class Mugicha:
 
         self.exploration_rate = 1
         self.exploration_rate_decay = ERD
-        self.exploration_rate_min = 0.1
+        self.exploration_rate_min = 0.01
         self.curr_step = 0
 
         self.optimizer = torch.optim.Adam(self.net.parameters(), lr=lr)
@@ -209,3 +210,11 @@ class Mugicha:
         print(f"Loading model at {load_path} with exploration rate {exploration_rate}")
         self.net.load_state_dict(state_dict)
         self.exploration_rate = exploration_rate
+
+    def save_memory(self, filename):
+        with open(filename, 'wb') as f:
+            pickle.dump(self.memory, f)
+
+    def load_memory(self, filename):
+        with open(filename, 'rb') as f:
+            self.memory = pickle.load(f)
