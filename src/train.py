@@ -40,6 +40,8 @@ mugicha = Mugicha(state_dim=(1, 84, 84), action_dim=12, drop_poly_dim=3, poly_di
 # load_path = Path("trained_models/mugicha_net_0.chkpt")
 # mugicha.load(load_path)
 
+mugicha.load_memory('trained_models/memory.pkl')  # 学習を再開するときにメモリをロード
+
 logger = MetricLogger(log_dir)
 
 
@@ -64,6 +66,8 @@ for e in tqdm(range(episodes)):
 
         # 記憶
         mugicha.cache(state, next_state, action, reward, done)
+
+        mugicha.save_memory('trained_models/memory.pkl')  # 学習途中でメモリを保存
 
         # 訓練
         q, loss = mugicha.learn()
