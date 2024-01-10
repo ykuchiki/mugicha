@@ -36,20 +36,23 @@ log_dir = Path("log")
 # save_dir.mkdir(parents=True)
 
 
-mugicha = Mugicha(state_dim=(1, 84, 84), action_dim=12, drop_poly_dim=3, poly_dim=60, save_dir=save_dir)
-# load_path = Path("trained_models/mugicha_net_0.chkpt")
-# mugicha.load(load_path)
+mugicha = Mugicha(state_dim=(1, 84, 84), action_dim=12, drop_poly_dim=3, poly_dim=120, save_dir=save_dir)
+load_path = Path("trained_models/mugicha_net_0.chkpt")
+mugicha.load(load_path)
 
 mugicha.load_memory('trained_models/memory.pkl')  # 学習を再開するときにメモリをロード
 
 logger = MetricLogger(log_dir)
 
 
-episodes = 10000
+episodes = 1000000
+counter = 0
 
 for e in tqdm(range(episodes)):
 
     state, _ = env.reset()
+    total_reward = 0  # エピソードごとの合計報酬
+
 
     # ゲーム開始！
     while True:
@@ -58,6 +61,7 @@ for e in tqdm(range(episodes)):
         action = mugicha.act(state)
         # エージェントが行動を実行
         next_state, reward, done, _, info = env.step(action)
+        total_reward += reward  # 各ステップの報酬を加算
         print("reward is ", reward)
 
         # float32 -> 画像として保存
@@ -67,7 +71,10 @@ for e in tqdm(range(episodes)):
         # 記憶
         mugicha.cache(state, next_state, action, reward, done)
 
-        mugicha.save_memory('trained_models/memory.pkl')  # 学習途中でメモリを保存
+        if counter == 10000:
+            mugicha.save_memory('trained_models/memory.pkl')  # 学習途中でメモリを保存
+            counter = 0
+        counter += 1
 
         # 訓練
         q, loss = mugicha.learn()
@@ -84,7 +91,8 @@ for e in tqdm(range(episodes)):
         # ゲームが終了したかどうかを確認
         # if done or info["flag_get"]:  # ゲームの終了条件によってはこれ
         if done:
-            mugicha.save()
+            mugicha.save(0)
+            mugicha.end_episode(total_reward, 2)  # 最高モデルのモデルを保存
             break
 
     # エピソードが終了したので、イプシロンを更新

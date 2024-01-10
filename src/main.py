@@ -52,7 +52,6 @@ class Game:
                 # self.env.reset()
                 self.env.close()
 
-
 class AIDrive:
     def __init__(self):
         # pygame.init()
@@ -63,7 +62,7 @@ class AIDrive:
         self.env.reset()
         self.state, _ = self.env.reset()
         save_dir = Path("trained_models")
-        self.mugicha = Mugicha(state_dim=(1, 84, 84), action_dim=12, drop_poly_dim=3, poly_dim=60, save_dir=save_dir)
+        self.mugicha = Mugicha(state_dim=(1, 84, 84), action_dim=12, drop_poly_dim=3, poly_dim=120, save_dir=save_dir)
         load_path = Path("trained_models/mugicha_net_0.chkpt")
         self.mugicha.load(load_path)
 

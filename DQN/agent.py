@@ -11,10 +11,9 @@ CAPACITY = 100000
 BATCH_SIZE = 32
 GAMMA = 0.9
 SAVE_FREQUENCY = 5e5
-SAVE_NUM = 0
 
 ERD = 0.9998
-# ERD = 0
+# ERD = 0.0001
 lr = 0.00025
 
 class Mugicha:
@@ -25,7 +24,10 @@ class Mugicha:
         self.poly_dim = poly_dim
         self.save_dir = save_dir
 
+        self.best_reward = -float('inf')
+
         self.use_cuda = torch.cuda.is_available()
+
 
         self.memory = deque(maxlen=CAPACITY)
         self.batch_size = BATCH_SIZE
@@ -40,6 +42,7 @@ class Mugicha:
         self.exploration_rate = 1
         self.exploration_rate_decay = ERD
         self.exploration_rate_min = 0.01
+        # self.episode_number = 0  # エピソード数の初期化
         self.curr_step = 0
 
         self.optimizer = torch.optim.Adam(self.net.parameters(), lr=lr)
@@ -48,7 +51,7 @@ class Mugicha:
         self.save_every = SAVE_FREQUENCY  # モデルを保存するまでの実験ステップの数
 
         self.burnin = 1e4  # 経験を訓練させるために最低限必要なステップ数
-        # self.burnin = 33
+        # self.burnin = 41
         self.learn_every = 3  # Q_onlineを更新するタイミングを示すステップ数
         self.sync_every = 1e4  # Q_target & Q_onlineを同期させるタイミングを示すステップ数
 
@@ -83,7 +86,7 @@ class Mugicha:
 
             image_data = image_data.unsqueeze(0)
             image_data = image_data.unsqueeze(0)
-            action_values = self.net(image_data, drop_poly_info, poly_info, model="online")
+            action_values, _ = self.net(image_data, drop_poly_info, poly_info, model="online")
             action_idx = torch.argmax(action_values, axis=1).item() 
 
         #self.update_exploration_rate()
@@ -100,6 +103,9 @@ class Mugicha:
         self.exploration_rate = max(self.exploration_rate_min, self.exploration_rate)
         print("ERD is ", self.exploration_rate)
 
+    def update_exploration_rate_(self):
+        # 二次関数的な減衰を適用
+        self.exploration_rate = max(self.exploration_rate_min, 1 - self.exploration_rate_decay * (self.episode_number ** 2))
 
     def cache(self, state, next_state, action, reward, done):
         state_image = torch.tensor(state['image'].__array__(), dtype=torch.float32)
@@ -139,17 +145,24 @@ class Mugicha:
     def td_estimate(self, state_image, state_drop_poly, state_poly, action):
         action = (action - 66) // 29
         state_image = state_image.float()
-        current_Q = self.net(state_image, state_drop_poly, state_poly, model='online')[np.arange(0, self.batch_size), action]  # Q_online(s,a)
+        current_Q_values, _ = self.net(state_image, state_drop_poly, state_poly, model='online')
+        current_Q = current_Q_values[np.arange(0, self.batch_size), action] 
         return current_Q
 
     @torch.no_grad()
     def td_target(self, reward, next_state_image, next_state_drop_poly, next_state_poly, done):
-        next_state_Q = self.net(next_state_image, next_state_drop_poly, next_state_poly, model="online")
-        best_action = torch.argmax(next_state_Q, axis=1) 
-        next_Q = self.net(next_state_image, next_state_drop_poly, next_state_poly, model="target")[
-            np.arange(0, self.batch_size), best_action 
-        ]
-        return (reward + (1 - done.float()) * self.gamma * next_Q).float()
+        # 次の状態での最善の行動をオンラインモデルで決定
+        next_state_Q_values, _ = self.net(next_state_image, next_state_drop_poly, next_state_poly, model="online")
+        best_action = torch.argmax(next_state_Q_values, axis=1)
+
+        # 次の状態での最善の行動のQ値をターゲットモデルで決定
+        next_Q_values, _ = self.net(next_state_image, next_state_drop_poly, next_state_poly, model="target")
+        next_Q = next_Q_values[np.arange(0, self.batch_size), best_action]
+
+        # TDターゲットの計算
+        td_target = reward + (1 - done.float()) * self.gamma * next_Q
+
+        return td_target.float()
 
     def update_Q_online(self, td_estimate, td_target):
         loss = self.loss_fn(td_estimate, td_target)
@@ -161,7 +174,7 @@ class Mugicha:
     def sync_Q_target(self):
         self.net.target.load_state_dict(self.net.online.state_dict())
 
-    def save(self):
+    def save(self, SAVE_NUM):
         save_path = (
                 self.save_dir / f"mugicha_net_{SAVE_NUM}.chkpt"
         )
@@ -177,7 +190,7 @@ class Mugicha:
             self.sync_Q_target()
 
         if self.curr_step % self.save_every == 0:
-            self.save()
+            self.save(0)
 
         if self.curr_step < self.burnin:
             return None, None
@@ -218,3 +231,19 @@ class Mugicha:
     def load_memory(self, filename):
         with open(filename, 'rb') as f:
             self.memory = pickle.load(f)
+
+    def end_episode(self, total_reward, SAVE_NUM):
+        # エピソード終了時の処理
+        if total_reward > self.best_reward:
+            self.best_reward = total_reward  # 最高報酬を更新
+            self.save(SAVE_NUM)  # モデルを保存
+
+    def end_episode_(self, total_reward, SAVE_NUM):
+        # エピソード終了時の処理
+        if total_reward > self.best_reward:
+            self.best_reward = total_reward
+            self.save(SAVE_NUM)
+        
+        # 探索率の更新
+        self.update_exploration_rate()
+        self.episode_number += 1  # エピソード数をインクリメント

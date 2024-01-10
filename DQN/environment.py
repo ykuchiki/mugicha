@@ -227,7 +227,9 @@ class MugichaEnv(gym.Env):
         all_poly_data = []
         poly_info = []  # (60)[インデックス，x座標，y座標] 
         for poly in self.poly:
-            tmp = [int(poly.index), int(poly.body.position.x), int(poly.body.position.y)]
+            normalized_x = self.normalize_coordinate(poly.body.position.x, WIDTH)
+            normalized_y = self.normalize_coordinate(poly.body.position.y, HEIGHT)
+            tmp = [int(poly.index)/11, normalized_x, normalized_y]
             all_poly_data.append(tmp)
 
         all_poly_data_sorted = sorted(all_poly_data, reverse=False, key=lambda x: x[2])
@@ -237,10 +239,10 @@ class MugichaEnv(gym.Env):
             poly_info.append(s_poly[1])
             poly_info.append(s_poly[2])
             counter += 1
-            if counter == 20:
+            if counter == 40:
                 break
-        if counter < 20:
-            for _ in range(20 - counter):
+        if counter < 40:
+            for _ in range(40 - counter):
                 poly_info.append(int(-1))
                 poly_info.append(int(-1))
                 poly_info.append(int(-1))
@@ -392,18 +394,18 @@ class MugichaEnv(gym.Env):
         reward = 0
         # 現在のスコアと前のステップのスコアを比較
         if self.isGameOver or self.countOverflow > OVER_FLOW_NUM:
-            reward = -1
+            reward = -10
         else:
             # 現在のスコアと前のステップのスコアを比較
             score_change = self.score - self.previous_score
 
             # スコアが増加した場合，正の報酬
             if score_change > 0:
-                reward = 0.0001 * score_change ** 2
+                reward = 0.01 * score_change ** 2
 
         # 同じアクションが4回以上選択された場合の減点を考慮
         if self.same_action_count >= 4:
-            reward -= 0.03 * self.same_action_count  # 減点量
+            reward -= 0.003 * self.same_action_count  # 減点量
 
         self.previous_score = self.score
         return reward
@@ -449,3 +451,8 @@ class MugichaEnv(gym.Env):
 
         #image = np.expand_dims(image, axis=0)
         return np.array(image)
+    
+    def normalize_coordinate(self, value, max_value):
+        """座標値を0から1の範囲に正規化する"""
+        return value / max_value
+    
